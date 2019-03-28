@@ -66,9 +66,7 @@ void RenderPass::setExecuteSync(JobSystem::Job* sync) noexcept {
     mSync = sync;
 }
 
-void RenderPass::render(
-        const char* name, backend::Handle<backend::HwRenderTarget> renderTarget,
-        backend::RenderPassParams params) noexcept {
+void RenderPass::generateSortedCommands() noexcept {
     SYSTRACE_CONTEXT();
 
     // trace the number of visible renderables
@@ -123,6 +121,10 @@ void RenderPass::render(
         std::sort(commands.begin(), commands.end());
     }
 
+    mCommandsHighWatermark = std::max(mCommandsHighWatermark, size_t(commands.size()));
+
+
+
     // find the last command
     Command const* const last = std::partition_point(commands.begin(), commands.end(),
             [](Command const& c) {
@@ -134,21 +136,29 @@ void RenderPass::render(
         js.waitAndRelease(mSync);
     }
 
+    commands.resize(uint32_t(last - commands.begin()));
+}
+
+void RenderPass::execute(const char* name,
+        backend::Handle<backend::HwRenderTarget> renderTarget,
+        backend::RenderPassParams params,
+        Command const* first, Command const* last) const noexcept {
+
+    FEngine& engine = mEngine;
+    FScene& scene = *mScene;
+
     // Take care not to upload data within the render pass (synchronize can commit froxel data)
     DriverApi& driver = engine.getDriverApi();
 
     // Now, execute all commands
     driver.pushGroupMarker(name);
     driver.beginRenderPass(renderTarget, params);
-    RenderPass::recordDriverCommands(driver, scene, commands.begin(), last);
+    RenderPass::recordDriverCommands(driver, scene, first, last);
     driver.endRenderPass();
     driver.popGroupMarker();
 
     driver.flush(); // Kick the GPU since we're done with this render target
     engine.flush(); // Wake-up the driver thread
-
-    mCommandsHighWatermark = std::max(mCommandsHighWatermark, size_t(commands.size()));
-    commands.clear();
 }
 
 /* static */
