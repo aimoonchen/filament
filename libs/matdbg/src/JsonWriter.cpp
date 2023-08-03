@@ -114,6 +114,93 @@ static bool printMaterial(ostream& json, const ChunkContainer& container) {
 
 static bool printParametersInfo(ostream& json, const ChunkContainer& container) {
     // TODO
+	if (!container.hasChunk(ChunkType::MaterialUib)) {
+		return true;
+	}
+
+	auto [startUib, endUib] = container.getChunkRange(ChunkType::MaterialUib);
+	Unflattener uib(startUib, endUib);
+
+	CString name;
+	if (!uib.read(&name)) {
+		return false;
+	}
+
+	uint64_t uibCount;
+	if (!uib.read(&uibCount)) {
+		return false;
+	}
+
+	auto [startSib, endSib] = container.getChunkRange(ChunkType::MaterialSib);
+	Unflattener sib(startSib, endSib);
+
+	if (!sib.read(&name)) {
+		return false;
+	}
+
+	uint64_t sibCount;
+	if (!sib.read(&sibCount)) {
+		return false;
+	}
+
+	if (uibCount == 0 && sibCount == 0) {
+		return true;
+	}
+
+    json << "\"parameters\": {\n";
+
+    for (uint64_t i = 0; i < uibCount; i++) {
+        CString fieldName;
+        uint64_t fieldSize;
+        uint8_t fieldType;
+        uint8_t fieldPrecision;
+
+        if (!uib.read(&fieldName)) {
+            return false;
+        }
+
+        if (!uib.read(&fieldSize)) {
+            return false;
+        }
+
+        if (!uib.read(&fieldType)) {
+            return false;
+        }
+
+        if (!uib.read(&fieldPrecision)) {
+            return false;
+        }
+        json << "\"" << fieldName.c_str() << "\": \"" << toString(UniformType(fieldType)) << arraySizeToString(fieldSize) << "\",\n";
+    }
+    
+    for (uint64_t i = 0; i < sibCount; i++) {
+        CString fieldName;
+        uint8_t fieldType;
+        uint8_t fieldFormat;
+        uint8_t fieldPrecision;
+        bool fieldMultisample;
+
+        if (!sib.read(&fieldName)) {
+            return false;
+        }
+
+        if (!sib.read(&fieldType)) {
+            return false;
+        }
+
+        if (!sib.read(&fieldFormat))
+            return false;
+
+        if (!sib.read(&fieldPrecision)) {
+            return false;
+        }
+
+        if (!sib.read(&fieldMultisample)) {
+            return false;
+        }
+        json << "\"" << fieldName.c_str() << "\": \"" << toString(UniformType(fieldType)) << "\",\n";
+    }
+    json << "\"_\": 0 },\n";
     return true;
 }
 
