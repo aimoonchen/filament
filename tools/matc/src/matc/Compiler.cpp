@@ -16,6 +16,11 @@
 
 #include "Compiler.h"
 
+#include <filaflat/ChunkContainer.h>
+#include <matdbg/ShaderExtractor.h>
+#include <matdbg/ShaderInfo.h>
+#include <matdbg/JsonWriter.h>
+
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -31,8 +36,52 @@ bool Compiler::writeBlob(const Package &pkg, const Config& config) const noexcep
         return false;
     }
 
-    output->write(pkg.getData(), pkg.getSize());
-    output->close();
+	using namespace filament::matdbg;
+	filaflat::ChunkContainer container(pkg.getData(), pkg.getSize());
+	if (!container.parse()) {
+		return false;
+	}
+
+	JsonWriter jwriter;
+	if (!jwriter.writeMaterialInfo(container)) {
+		return false;
+	}
+	//std::cout << jwriter.getJsonString();
+    size_t size = jwriter.getJsonSize();
+    output->write((uint8_t*)&size, sizeof(size_t));
+    output->write((const uint8_t*)jwriter.getJsonString(), size);
+
+	
+	std::vector<ShaderInfo> info;
+	ShaderExtractor parser(filament::backend::Backend::OPENGL, pkg.getData(), pkg.getSize());
+	if (!parser.parse()) {
+		return false;
+	}
+
+	info.resize(getShaderCount(container, filamat::ChunkType::MaterialGlsl));
+	if (!getGlShaderInfo(container, info.data())) {
+		std::cerr << "Failed to parse GLSL chunk." << std::endl;
+		return false;
+	}
+
+    std::vector<filaflat::ShaderContent> contents;
+    contents.resize(info.size());
+	for (int i = 0; i < info.size(); i++) {
+		const auto& item = info[i];
+        auto shaderkey = (uint32_t(item.shaderModel) << 16) | (uint32_t(item.pipelineStage) << 8) | item.variant.key;
+        parser.getShader(item.shaderModel, item.variant, item.pipelineStage, contents[i]);
+        uint32_t size = contents[i].size();
+        output->write((uint8_t*)&size, sizeof(uint32_t));
+	}
+
+    for (int i = 0; i < contents.size(); i++) {
+        output->write(contents[i].data(), contents[i].size());
+    }
+
+	return true;
+
+//     output->write(pkg.getData(), pkg.getSize());
+//     output->close();
 
     return true;
 }
