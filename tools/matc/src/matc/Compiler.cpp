@@ -35,7 +35,7 @@ bool Compiler::writeBlob(const Package &pkg, const Config& config) const noexcep
         std::cerr << "Unable to create blob file." << std::endl;
         return false;
     }
-
+    // to bgfx material
 	using namespace filament::matdbg;
 	filaflat::ChunkContainer container(pkg.getData(), pkg.getSize());
 	if (!container.parse()) {
@@ -47,10 +47,10 @@ bool Compiler::writeBlob(const Package &pkg, const Config& config) const noexcep
 		return false;
 	}
 	//std::cout << jwriter.getJsonString();
-    size_t size = jwriter.getJsonSize();
-    output->write((uint8_t*)&size, sizeof(size_t));
-    output->write((const uint8_t*)jwriter.getJsonString(), size);
-
+    uint32_t jsonsize = jwriter.getJsonSize();
+    output->write((uint8_t*)&jsonsize, sizeof(uint32_t));
+    output->write((const uint8_t*)jwriter.getJsonString(), jsonsize);
+    uint32_t shaderoffset = sizeof(uint32_t) + jsonsize;
 	
 	std::vector<ShaderInfo> info;
 	ShaderExtractor parser(filament::backend::Backend::OPENGL, pkg.getData(), pkg.getSize());
@@ -64,24 +64,31 @@ bool Compiler::writeBlob(const Package &pkg, const Config& config) const noexcep
 		return false;
 	}
 
+    uint32_t shadercount = info.size();
+    output->write((uint8_t*)&shadercount, sizeof(uint32_t));
+    shaderoffset += sizeof(uint32_t);
+
     std::vector<filaflat::ShaderContent> contents;
-    contents.resize(info.size());
-	for (int i = 0; i < info.size(); i++) {
+    contents.resize(shadercount);
+    shaderoffset += sizeof(uint32_t) * 3 * shadercount;
+	for (int i = 0; i < shadercount; i++) {
 		const auto& item = info[i];
-        auto shaderkey = (uint32_t(item.shaderModel) << 16) | (uint32_t(item.pipelineStage) << 8) | item.variant.key;
+        uint32_t shaderkey = (uint32_t(item.shaderModel) << 16) | (uint32_t(item.pipelineStage) << 8) | item.variant.key;
+        output->write((uint8_t*)&shaderkey, sizeof(uint32_t));
+        output->write((uint8_t*)&shaderoffset, sizeof(uint32_t));
         parser.getShader(item.shaderModel, item.variant, item.pipelineStage, contents[i]);
-        uint32_t size = contents[i].size();
-        output->write((uint8_t*)&size, sizeof(uint32_t));
+        uint32_t contentsize = contents[i].size();
+        output->write((uint8_t*)&contentsize, sizeof(uint32_t));
+        shaderoffset += contentsize;
 	}
 
-    for (int i = 0; i < contents.size(); i++) {
+    for (int i = 0; i < shadercount; i++) {
         output->write(contents[i].data(), contents[i].size());
     }
 
-	return true;
-
 //     output->write(pkg.getData(), pkg.getSize());
-//     output->close();
+
+    output->close();
 
     return true;
 }

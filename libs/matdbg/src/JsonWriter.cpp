@@ -260,6 +260,7 @@ static bool printMetalInfo(ostream& json, const ChunkContainer& container) {
 
 bool JsonWriter::writeMaterialInfo(const filaflat::ChunkContainer& container) {
     ostringstream json;
+    json << "{\n";
     if (!printMaterial(json, container)) {
         return false;
     }
@@ -292,7 +293,7 @@ bool JsonWriter::writeMaterialInfo(const filaflat::ChunkContainer& container) {
         }
     }
     json << "]\n";
-
+    json << "}\n";
     mJsonString = CString(json.str().c_str());
     return true;
 }
