@@ -182,6 +182,8 @@ public:
         return CONFIG_MAX_INSTANCES;
     }
 
+    bool isStereoSupported() const noexcept { return getDriver().isStereoSupported(); }
+
     PostProcessManager const& getPostProcessManager() const noexcept {
         return mPostProcessManager;
     }
@@ -264,7 +266,7 @@ public:
 
     FScene* createScene() noexcept;
     FView* createView() noexcept;
-    FFence* createFence(FFence::Type type) noexcept;
+    FFence* createFence() noexcept;
     FSwapChain* createSwapChain(void* nativeWindow, uint64_t flags) noexcept;
     FSwapChain* createSwapChain(uint32_t width, uint32_t height, uint64_t flags) noexcept;
 

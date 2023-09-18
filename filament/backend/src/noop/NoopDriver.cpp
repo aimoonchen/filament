@@ -58,7 +58,7 @@ void NoopDriver::setFrameScheduledCallback(Handle<HwSwapChain> sch,
 }
 
 void NoopDriver::setFrameCompletedCallback(Handle<HwSwapChain> sch,
-        FrameCompletedCallback callback, void* user) {
+        CallbackHandler* handler, CallbackHandler::Callback callback, void* user) {
 
 }
 
@@ -132,7 +132,7 @@ void NoopDriver::updateStreams(CommandStream* driver) {
 void NoopDriver::destroyFence(Handle<HwFence> fh) {
 }
 
-FenceStatus NoopDriver::wait(Handle<HwFence> fh, uint64_t timeout) {
+FenceStatus NoopDriver::getFenceStatus(Handle<HwFence> fh) {
     return FenceStatus::CONDITION_SATISFIED;
 }
 
@@ -171,6 +171,14 @@ bool NoopDriver::isAutoDepthResolveSupported() {
 }
 
 bool NoopDriver::isSRGBSwapChainSupported() {
+    return false;
+}
+
+bool NoopDriver::isStereoSupported() {
+    return false;
+}
+
+bool NoopDriver::isParallelShaderCompileSupported() {
     return false;
 }
 

@@ -796,32 +796,54 @@ enum class SamplerCompareFunc : uint8_t {
 
 //! Sampler parameters
 struct SamplerParams { // NOLINT
-    union {
-        struct {
-            SamplerMagFilter filterMag      : 1;    //!< magnification filter (NEAREST)
-            SamplerMinFilter filterMin      : 3;    //!< minification filter  (NEAREST)
-            SamplerWrapMode wrapS           : 2;    //!< s-coordinate wrap mode (CLAMP_TO_EDGE)
-            SamplerWrapMode wrapT           : 2;    //!< t-coordinate wrap mode (CLAMP_TO_EDGE)
+    SamplerMagFilter filterMag      : 1;    //!< magnification filter (NEAREST)
+    SamplerMinFilter filterMin      : 3;    //!< minification filter  (NEAREST)
+    SamplerWrapMode wrapS           : 2;    //!< s-coordinate wrap mode (CLAMP_TO_EDGE)
+    SamplerWrapMode wrapT           : 2;    //!< t-coordinate wrap mode (CLAMP_TO_EDGE)
 
-            SamplerWrapMode wrapR           : 2;    //!< r-coordinate wrap mode (CLAMP_TO_EDGE)
-            uint8_t anisotropyLog2          : 3;    //!< anisotropy level (0)
-            SamplerCompareMode compareMode  : 1;    //!< sampler compare mode (NONE)
-            uint8_t padding0                : 2;    //!< reserved. must be 0.
+    SamplerWrapMode wrapR           : 2;    //!< r-coordinate wrap mode (CLAMP_TO_EDGE)
+    uint8_t anisotropyLog2          : 3;    //!< anisotropy level (0)
+    SamplerCompareMode compareMode  : 1;    //!< sampler compare mode (NONE)
+    uint8_t padding0                : 2;    //!< reserved. must be 0.
 
-            SamplerCompareFunc compareFunc  : 3;    //!< sampler comparison function (LE)
-            uint8_t padding1                : 5;    //!< reserved. must be 0.
+    SamplerCompareFunc compareFunc  : 3;    //!< sampler comparison function (LE)
+    uint8_t padding1                : 5;    //!< reserved. must be 0.
+    uint8_t padding2                : 8;    //!< reserved. must be 0.
 
-            uint8_t padding2                : 8;    //!< reserved. must be 0.
-        };
-        uint32_t u;
+    struct Hasher {
+        size_t operator()(SamplerParams p) const noexcept {
+            // we don't use std::hash<> here, so we don't have to include <functional>
+            return *reinterpret_cast<uint32_t const*>(reinterpret_cast<char const*>(&p));
+        }
     };
+
+    struct EqualTo {
+        bool operator()(SamplerParams lhs, SamplerParams rhs) const noexcept {
+            auto* pLhs = reinterpret_cast<uint32_t const*>(reinterpret_cast<char const*>(&lhs));
+            auto* pRhs = reinterpret_cast<uint32_t const*>(reinterpret_cast<char const*>(&rhs));
+            return *pLhs == *pRhs;
+        }
+    };
+
+    struct LessThan {
+        bool operator()(SamplerParams lhs, SamplerParams rhs) const noexcept {
+            auto* pLhs = reinterpret_cast<uint32_t const*>(reinterpret_cast<char const*>(&lhs));
+            auto* pRhs = reinterpret_cast<uint32_t const*>(reinterpret_cast<char const*>(&rhs));
+            return *pLhs == *pRhs;
+        }
+    };
+
 private:
-    friend inline bool operator < (SamplerParams lhs, SamplerParams rhs) {
-        return lhs.u < rhs.u;
+    friend inline bool operator < (SamplerParams lhs, SamplerParams rhs) noexcept {
+        return SamplerParams::LessThan{}(lhs, rhs);
     }
 };
+static_assert(sizeof(SamplerParams) == 4);
 
-static_assert(sizeof(SamplerParams) == sizeof(uint32_t), "SamplerParams must be 32 bits");
+// The limitation to 64-bits max comes from how we store a SamplerParams in our JNI code
+// see android/.../TextureSampler.cpp
+static_assert(sizeof(SamplerParams) <= sizeof(uint64_t),
+        "SamplerParams must be no more than 64 bits");
 
 //! blending equation function
 enum class BlendEquation : uint8_t {
@@ -1126,8 +1148,6 @@ static_assert(sizeof(StencilState) == 12u,
 
 using FrameScheduledCallback = void(*)(PresentCallable callable, void* user);
 
-using FrameCompletedCallback = void(*)(void* user);
-
 enum class Workaround : uint16_t {
     // The EASU pass must split because shader compiler flattens early-exit branch
     SPLIT_EASU,
@@ -1141,6 +1161,11 @@ enum class Workaround : uint16_t {
     A8X_STATIC_TEXTURE_TARGET_ERROR,
     // Adreno drivers sometimes aren't able to blit into a layer of a texture array.
     DISABLE_BLIT_INTO_TEXTURE_ARRAY,
+    // Multiple workarounds needed for PowerVR GPUs
+    POWER_VR_SHADER_WORKAROUNDS,
+    // The driver has some threads pinned, and we can't easily know on which core, it can hurt
+    // performance more if we end-up pinned on the same one.
+    DISABLE_THREAD_AFFINITY
 };
 
 } // namespace filament::backend

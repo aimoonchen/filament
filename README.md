@@ -31,7 +31,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.android.filament:filament-android:1.40.4'
+    implementation 'com.google.android.filament:filament-android:1.42.2'
 }
 ```
 
@@ -50,8 +50,8 @@ Here are all the libraries available in the group `com.google.android.filament`:
 
 iOS projects can use CocoaPods to install the latest release:
 
-```
-pod 'Filament', '~> 1.40.4'
+```shell
+pod 'Filament', '~> 1.42.2'
 ```
 
 ### Snapshots

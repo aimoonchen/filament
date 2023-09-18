@@ -105,7 +105,7 @@ void Engine::destroyCameraComponent(utils::Entity entity) noexcept {
 }
 
 Fence* Engine::createFence() noexcept {
-    return downcast(this)->createFence(FFence::Type::SOFT);
+    return downcast(this)->createFence();
 }
 
 SwapChain* Engine::createSwapChain(void* nativeWindow, uint64_t flags) noexcept {
@@ -325,6 +325,10 @@ FeatureLevel Engine::getActiveFeatureLevel() const noexcept {
 
 size_t Engine::getMaxAutomaticInstances() const noexcept {
     return downcast(this)->getMaxAutomaticInstances();
+}
+
+bool Engine::isStereoSupported() const noexcept {
+    return downcast(this)->isStereoSupported();
 }
 
 #if defined(__EMSCRIPTEN__)

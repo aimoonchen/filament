@@ -27,10 +27,10 @@ set(SRCS
         src/BackendUtils.cpp
         src/BlobCacheKey.cpp
         src/Callable.cpp
-        src/CallbackHandler.cpp
         src/CircularBuffer.cpp
         src/CommandBufferQueue.cpp
         src/CommandStream.cpp
+        src/CompilerThreadPool.cpp
         src/Driver.cpp
         src/Handle.cpp
         src/HandleAllocator.cpp
@@ -55,6 +55,7 @@ set(PRIVATE_HDRS
         include/private/backend/PlatformFactory.h
         include/private/backend/SamplerGroup.h
         src/CommandStreamDispatcher.h
+        src/CompilerThreadPool.h
         src/DataReshaper.h
         src/DriverBase.h
 )
@@ -66,6 +67,8 @@ set(PRIVATE_HDRS
 if (FILAMENT_SUPPORTS_OPENGL AND NOT FILAMENT_USE_EXTERNAL_GLES3 AND NOT FILAMENT_USE_SWIFTSHADER)
     list(APPEND SRCS
             include/backend/platforms/OpenGLPlatform.h
+            src/opengl/CallbackManager.h
+            src/opengl/CallbackManager.cpp
             src/opengl/gl_headers.cpp
             src/opengl/gl_headers.h
             src/opengl/GLUtils.cpp
@@ -174,8 +177,6 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/VulkanConstants.h
             src/vulkan/VulkanContext.cpp
             src/vulkan/VulkanContext.h
-            src/vulkan/VulkanDisposer.cpp
-            src/vulkan/VulkanDisposer.h
             src/vulkan/VulkanDriver.cpp
             src/vulkan/VulkanDriver.h
             src/vulkan/VulkanDriverFactory.h
@@ -197,6 +198,9 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/VulkanSwapChain.h
             src/vulkan/VulkanReadPixels.cpp
             src/vulkan/VulkanReadPixels.h
+            src/vulkan/VulkanResourceAllocator.h
+            src/vulkan/VulkanResources.cpp
+            src/vulkan/VulkanResources.h
             src/vulkan/VulkanTexture.cpp
             src/vulkan/VulkanTexture.h
             src/vulkan/VulkanUtility.cpp
@@ -408,6 +412,7 @@ if (APPLE)
         test/test_RenderExternalImage.cpp
         test/test_StencilBuffer.cpp
         test/test_Scissor.cpp
+        test/test_MipLevels.cpp
         )
 
     target_link_libraries(backend_test PRIVATE

@@ -25,6 +25,7 @@
 #include <utils/EntityInstance.h>
 
 #include <math/mathfwd.h>
+#include <math/quat.h>
 
 namespace utils {
     class Entity;
@@ -244,6 +245,7 @@ public:
          * shadows that are too far and wouldn't contribute to the scene much, improving
          * performance and quality. This value is always positive.
          * Use 0.0f to use the camera far distance.
+         * This only affect directional lights.
          */
         float shadowFar = 0.0f;
 
@@ -360,6 +362,13 @@ public:
          * enabled. (2cm by default).
          */
         float shadowBulbRadius = 0.02f;
+
+        /**
+         * Transforms the shadow direction. Must be a unit quaternion.
+         * The default is identity.
+         * Ignored if the light type isn't directional. For artistic use. Use with caution.
+         */
+        math::quatf transform{ 1.0f };
     };
 
     struct ShadowCascades {
@@ -671,7 +680,7 @@ public:
      * @return      true is this light is a type of directional light
      */
     inline bool isDirectional(Instance i) const noexcept {
-        Type type = getType(i);
+        Type const type = getType(i);
         return type == Type::DIRECTIONAL || type == Type::SUN;
     }
 
@@ -692,7 +701,7 @@ public:
      * @return      true is this light is a type of spot light
      */
     inline bool isSpotLight(Instance i) const noexcept {
-        Type type = getType(i);
+        Type const type = getType(i);
         return type == Type::SPOT || type == Type::FOCUSED_SPOT;
     }
 

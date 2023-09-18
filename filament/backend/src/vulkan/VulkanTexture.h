@@ -17,26 +17,29 @@
  #ifndef TNT_FILAMENT_BACKEND_VULKANTEXTURE_H
  #define TNT_FILAMENT_BACKEND_VULKANTEXTURE_H
 
-#include "VulkanDriver.h"
+#include "DriverBase.h"
+
 #include "VulkanBuffer.h"
+#include "VulkanResources.h"
 #include "VulkanImageUtility.h"
 
 #include <utils/RangeMap.h>
 
 namespace filament::backend {
 
-struct VulkanTexture : public HwTexture {
+struct VulkanTexture : public HwTexture, VulkanResource {
     // Standard constructor for user-facing textures.
     VulkanTexture(VkDevice device, VkPhysicalDevice physicalDevice, VulkanContext const& context,
             VmaAllocator allocator, VulkanCommands* commands, SamplerType target, uint8_t levels,
             TextureFormat tformat, uint8_t samples, uint32_t w, uint32_t h, uint32_t depth,
-            TextureUsage tusage, VulkanStagePool& stagePool, VkComponentMapping swizzle = {});
+            TextureUsage tusage, VulkanStagePool& stagePool, bool heapAllocated = false,
+            VkComponentMapping swizzle = {});
 
     // Specialized constructor for internally created textures (e.g. from a swap chain)
     // The texture will never destroy the given VkImage, but it does manages its subresources.
     VulkanTexture(VkDevice device, VmaAllocator allocator, VulkanCommands* commands, VkImage image,
             VkFormat format, uint8_t samples, uint32_t width, uint32_t height, TextureUsage tusage,
-            VulkanStagePool& stagePool);
+            VulkanStagePool& stagePool, bool heapAllocated = false);
 
     ~VulkanTexture();
 
@@ -81,7 +84,7 @@ struct VulkanTexture : public HwTexture {
     // For now this always returns either DEPTH or COLOR.
     VkImageAspectFlags getImageAspect() const;
 
-#if FILAMENT_VULKAN_VERBOSE
+#if FVK_ENABLED(FVK_DEBUG_TEXTURE)
     void print() const;
 #endif
 

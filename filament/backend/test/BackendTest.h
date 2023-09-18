@@ -43,7 +43,7 @@ protected:
 
     void initializeDriver();
     void executeCommands();
-    void flushAndWait(uint64_t timeout = 1000);
+    void flushAndWait();
 
     filament::backend::Handle<filament::backend::HwSwapChain> createSwapChain();
 
@@ -74,12 +74,6 @@ private:
 
     filament::backend::Handle<filament::backend::HwBufferObject> uniform;
 };
-
-
-// Utilities
-
-void getPixelInfo(filament::backend::PixelDataFormat format, filament::backend::PixelDataType type,
-        size_t& outComponents, int& outBpp);
 
 } // namespace test
 

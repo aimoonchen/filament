@@ -19,12 +19,16 @@
 
 #include "gl_headers.h"
 
+#include "CallbackManager.h"
+#include "CompilerThreadPool.h"
+
 #include <backend/CallbackHandler.h>
 #include <backend/Program.h>
 
 #include <utils/CString.h>
-#include <utils/Invocable.h>
 #include <utils/FixedCapacityVector.h>
+#include <utils/Invocable.h>
+#include <utils/JobSystem.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -48,10 +52,10 @@ class CallbackHandler;
  * A class handling shader compilation that supports asynchronous compilation.
  */
 class ShaderCompilerService {
-    struct ProgramToken;
+    struct OpenGLProgramToken;
 
 public:
-    using program_token_t = std::shared_ptr<ProgramToken>;
+    using program_token_t = std::shared_ptr<OpenGLProgramToken>;
 
     explicit ShaderCompilerService(OpenGLDriver& driver);
 
@@ -62,15 +66,13 @@ public:
 
     ~ShaderCompilerService() noexcept;
 
+    bool isParallelShaderCompileSupported() const noexcept;
+
     void init() noexcept;
     void terminate() noexcept;
 
     // creates a program (compile + link) asynchronously if supported
     program_token_t createProgram(utils::CString const& name, Program&& program);
-
-    // Returns true if the program is linked (successfully or not). Guarantees that
-    // getProgram() won't block. Does not block.
-    bool isProgramReady(const program_token_t& token) const noexcept;
 
     // Return the GL program, blocks if necessary. The Token is destroyed and becomes invalid.
     GLuint getProgram(program_token_t& token);
@@ -88,41 +90,16 @@ public:
     static void* getUserData(const program_token_t& token) noexcept;
 
     // call the callback when all active programs are ready
-    void notifyWhenAllProgramsAreReady(CompilerPriorityQueue priority,
+    void notifyWhenAllProgramsAreReady(
             CallbackHandler* handler, CallbackHandler::Callback callback, void* user);
 
 private:
-    class CompilerThreadPool {
-    public:
-        CompilerThreadPool() noexcept;
-        ~CompilerThreadPool() noexcept;
-        using Job = utils::Invocable<void()>;
-        void init(bool useSharedContexts, uint32_t threadCount, OpenGLPlatform& platform) noexcept;
-        void terminate() noexcept;
-        void queue(CompilerPriorityQueue priorityQueue, program_token_t const& token, Job&& job);
-        void makeUrgent(program_token_t const& token);
-
-    private:
-        using Queue = std::deque<std::pair<program_token_t, Job>>;
-        std::vector<std::thread> mCompilerThreads;
-        std::atomic_bool mExitRequested{ false };
-        std::mutex mQueueLock;
-        std::condition_variable mQueueCondition;
-        std::array<Queue, 2> mQueues;
-        Job mUrgentJob; // needs mQueueLock as well
-        Job dequeue(program_token_t const& token); // lock must be held
-        std::pair<Queue&, Queue::iterator> find(program_token_t const& token);
-    };
-
     OpenGLDriver& mDriver;
+    CallbackManager mCallbackManager;
     CompilerThreadPool mCompilerThreadPool;
 
     const bool KHR_parallel_shader_compile;
     uint32_t mShaderCompilerThreadCount = 0u;
-
-    // For now, we assume shared contexts are supported everywhere. If they are not,
-    // we don't use the shader compiler pool. However, the code supports it.
-    static constexpr bool mUseSharedContext = true;
 
     GLuint initialize(ShaderCompilerService::program_token_t& token) noexcept;
 
@@ -164,7 +141,7 @@ private:
     void runAtNextTick(CompilerPriorityQueue priority,
             const program_token_t& token, Job job) noexcept;
     void executeTickOps() noexcept;
-    void cancelTickOp(program_token_t token) noexcept;
+    bool cancelTickOp(program_token_t token) noexcept;
     // order of insertion is important
 
     using ContainerType = std::tuple<CompilerPriorityQueue, program_token_t, Job>;

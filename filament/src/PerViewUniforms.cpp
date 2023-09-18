@@ -66,7 +66,6 @@ void PerViewUniforms::prepareCamera(FEngine& engine, const CameraInfo& camera) n
     mat4f const& clipFromView  = camera.projection;
 
     const mat4f viewFromClip{ inverse((mat4)camera.projection) };
-    const mat4f clipFromWorld{ highPrecisionMultiply(clipFromView, viewFromWorld) };
     const mat4f worldFromClip{ highPrecisionMultiply(worldFromView, viewFromClip) };
 
     auto& s = mUniforms.edit();
@@ -74,13 +73,21 @@ void PerViewUniforms::prepareCamera(FEngine& engine, const CameraInfo& camera) n
     s.worldFromViewMatrix = worldFromView;    // model
     s.clipFromViewMatrix  = clipFromView;     // projection
     s.viewFromClipMatrix  = viewFromClip;     // 1/projection
-    s.clipFromWorldMatrix = clipFromWorld;    // projection * view
     s.worldFromClipMatrix = worldFromClip;    // 1/(projection * view)
     s.userWorldFromWorldMatrix = mat4f(inverse(camera.worldOrigin));
     s.clipTransform = camera.clipTransfrom;
     s.cameraFar = camera.zf;
     s.oneOverFarMinusNear = 1.0f / (camera.zf - camera.zn);
     s.nearOverFarMinusNear = camera.zn / (camera.zf - camera.zn);
+
+    mat4f const& headFromWorld = camera.view;
+    for (uint8_t i = 0; i < CONFIG_STEREOSCOPIC_EYES; i++) {
+        mat4f const& eyeFromHead = camera.eyeFromView[i];   // identity for monoscopic rendering
+        mat4f const& clipFromEye = camera.eyeProjection[i];
+        // clipFromEye * eyeFromHead * headFromWorld
+        s.clipFromWorldMatrix[i] = highPrecisionMultiply(
+                clipFromEye, highPrecisionMultiply(eyeFromHead, headFromWorld));
+    }
 
     // with a clip-space of [-w, w] ==> z' = -z
     // with a clip-space of [0,  w] ==> z' = (w - z)/2
@@ -278,7 +285,7 @@ void PerViewUniforms::prepareDirectionalLight(FEngine& engine,
         float exposure,
         float3 const& sceneSpaceDirection,
         PerViewUniforms::LightManagerInstance directionalLight) noexcept {
-    FLightManager& lcm = engine.getLightManager();
+    FLightManager const& lcm = engine.getLightManager();
     auto& s = mUniforms.edit();
 
     const float3 l = -sceneSpaceDirection; // guaranteed normalized
@@ -295,11 +302,11 @@ void PerViewUniforms::prepareDirectionalLight(FEngine& engine,
         // The last parameter must be < 0.0f for regular directional lights
         float4 sun{ 0.0f, 0.0f, 0.0f, -1.0f };
         if (UTILS_UNLIKELY(isSun && colorIntensity.w > 0.0f)) {
-            // currently we have only a single directional light, so it's probably likely that it's
+            // Currently we have only a single directional light, so it's probably likely that it's
             // also the Sun. However, conceptually, most directional lights won't be sun lights.
-            float radius = lcm.getSunAngularRadius(directionalLight);
-            float haloSize = lcm.getSunHaloSize(directionalLight);
-            float haloFalloff = lcm.getSunHaloFalloff(directionalLight);
+            float const radius = lcm.getSunAngularRadius(directionalLight);
+            float const haloSize = lcm.getSunHaloSize(directionalLight);
+            float const haloFalloff = lcm.getSunHaloFalloff(directionalLight);
             sun.x = std::cos(radius);
             sun.y = std::sin(radius);
             sun.z = 1.0f / (std::cos(radius * haloSize) - sun.x);

@@ -27,6 +27,8 @@ import static com.google.android.filament.Asserts.assertFloat3In;
 import static com.google.android.filament.Asserts.assertFloat4In;
 import static com.google.android.filament.Colors.LinearColor;
 
+import com.google.android.filament.proguard.UsedByNative;
+
 /**
  * Encompasses all the state needed for rendering a {@link Scene}.
  *
@@ -965,7 +967,8 @@ public class View {
                 options.heightFalloff, options.cutOffDistance,
                 options.color[0], options.color[1], options.color[2],
                 options.density, options.inScatteringStart, options.inScatteringSize,
-                options.fogColorFromIbl, options.skyColor.getNativeObject(),
+                options.fogColorFromIbl,
+                options.skyColor == null ? 0 : options.skyColor.getNativeObject(),
                 options.enabled);
     }
 
@@ -1095,10 +1098,29 @@ public class View {
         nPick(getNativeObject(), x, y, handler, internalCallback);
     }
 
+    @UsedByNative("View.cpp")
     private static class InternalOnPickCallback implements Runnable {
+        private final OnPickCallback mUserCallback;
+        private final PickingQueryResult mPickingQueryResult = new PickingQueryResult();
+
+        @UsedByNative("View.cpp")
+        @Entity
+        int mRenderable;
+
+        @UsedByNative("View.cpp")
+        float mDepth;
+
+        @UsedByNative("View.cpp")
+        float mFragCoordsX;
+        @UsedByNative("View.cpp")
+        float mFragCoordsY;
+        @UsedByNative("View.cpp")
+        float mFragCoordsZ;
+
         public InternalOnPickCallback(OnPickCallback mUserCallback) {
             this.mUserCallback = mUserCallback;
         }
+
         @Override
         public void run() {
             mPickingQueryResult.renderable = mRenderable;
@@ -1108,13 +1130,6 @@ public class View {
             mPickingQueryResult.fragCoords[2] = mFragCoordsZ;
             mUserCallback.onPick(mPickingQueryResult);
         }
-        private final OnPickCallback mUserCallback;
-        private final PickingQueryResult mPickingQueryResult = new PickingQueryResult();
-        @Entity int mRenderable;
-        float mDepth;
-        float mFragCoordsX;
-        float mFragCoordsY;
-        float mFragCoordsZ;
     }
 
     /**
@@ -1377,13 +1392,13 @@ public class View {
         /**
          * resolution of vertical axis (2^levels to 2048)
          */
-        public int resolution = 360;
+        public int resolution = 384;
         /**
          * bloom x/y aspect-ratio (1/32 to 32)
          */
         public float anamorphism = 1.0f;
         /**
-         * number of blur levels (3 to 11)
+         * number of blur levels (1 to 11)
          */
         public int levels = 6;
         /**
@@ -1970,5 +1985,12 @@ public class View {
          * Acceptable values are equal to or greater than 1.
          */
         public float penumbraRatioScale = 1.0f;
+    }
+
+    /**
+     * Options for stereoscopic (multi-eye) rendering.
+     */
+    public static class StereoscopicOptions {
+        public boolean enabled = false;
     }
 }

@@ -21,6 +21,7 @@
 
 #include "FFilamentAsset.h"
 #include "FNodeManager.h"
+#include "FTrsTransformManager.h"
 #include "GltfEnums.h"
 
 #include <filament/Box.h>
@@ -295,6 +296,7 @@ public:
     MaterialProvider& mMaterials;
     Engine& mEngine;
     FNodeManager mNodeManager;
+    FTrsTransformManager mTrsTransformManager;
 
     // Transient state used only for the asset currently being loaded:
     FFilamentAsset* mAsset;
@@ -400,7 +402,8 @@ void FAssetLoader::createRootAsset(const cgltf_data* srcAsset) {
     #endif
 
     mDummyBufferObject = nullptr;
-    mAsset = new FFilamentAsset(&mEngine, mNameManager, &mEntityManager, &mNodeManager, srcAsset);
+    mAsset = new FFilamentAsset(&mEngine, mNameManager, &mEntityManager, &mNodeManager,
+            &mTrsTransformManager, srcAsset);
 
     // It is not an error for a glTF file to have zero scenes.
     mAsset->mScenes.clear();
@@ -563,7 +566,9 @@ void FAssetLoader::recurseEntities(const cgltf_data* srcAsset, const cgltf_node*
         quatf* rotation = (quatf*) &node->rotation[0];
         float3* scale = (float3*) &node->scale[0];
         float3* translation = (float3*) &node->translation[0];
-        localTransform = composeMatrix(*translation, *rotation, *scale);
+        mTrsTransformManager.create(entity, *translation, *rotation, *scale);
+        localTransform = mTrsTransformManager.getTransform(
+                mTrsTransformManager.getInstance(entity));
     }
 
     auto parentTransform = mTransformManager.getInstance(parent);
@@ -1467,8 +1472,9 @@ MaterialInstance* FAssetLoader::createMaterialInstance(const cgltf_data* srcAsse
             }
         }
         if (matkey.hasSheenRoughnessTexture) {
+            bool sameTexture = shConfig.sheen_color_texture.texture == shConfig.sheen_roughness_texture.texture;
             mAsset->addTextureBinding(mi, "sheenRoughnessMap",
-                    shConfig.sheen_roughness_texture.texture, LINEAR);
+                    shConfig.sheen_roughness_texture.texture, sameTexture ? sRGB : LINEAR);
             if (matkey.hasTextureTransforms) {
                 const cgltf_texture_transform& uvt = shConfig.sheen_roughness_texture.transform;
                 auto uvmat = matrixFromUvTransform(uvt.offset, uvt.rotation, uvt.scale);

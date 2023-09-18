@@ -194,13 +194,15 @@ void MetalSwapChain::setFrameScheduledCallback(FrameScheduledCallback callback, 
     frameScheduledUserData = user;
 }
 
-void MetalSwapChain::setFrameCompletedCallback(FrameCompletedCallback callback, void* user) {
-    frameCompletedCallback = callback;
-    frameCompletedUserData = user;
+void MetalSwapChain::setFrameCompletedCallback(CallbackHandler* handler,
+        CallbackHandler::Callback callback, void* user) {
+    frameCompleted.handler = handler;
+    frameCompleted.callback = callback;
+    frameCompleted.user = user;
 }
 
 void MetalSwapChain::present() {
-    if (frameCompletedCallback) {
+    if (frameCompleted.callback) {
         scheduleFrameCompletedCallback();
     }
     if (drawable) {
@@ -244,30 +246,17 @@ void MetalSwapChain::scheduleFrameScheduledCallback() {
 }
 
 void MetalSwapChain::scheduleFrameCompletedCallback() {
-    if (!frameCompletedCallback) {
+    if (!frameCompleted.callback) {
         return;
     }
 
-    FrameCompletedCallback callback = frameCompletedCallback;
-    void* userData = frameCompletedUserData;
-    [getPendingCommandBuffer(&context) addCompletedHandler:^(id<MTLCommandBuffer> cb) {
-        struct CallbackData {
-            void* userData;
-            FrameCompletedCallback callback;
-        };
-        CallbackData* data = new CallbackData();
-        data->userData = userData;
-        data->callback = callback;
+    CallbackHandler* handler = frameCompleted.handler;
+    void* user = frameCompleted.user;
+    CallbackHandler::Callback callback = frameCompleted.callback;
 
-        // Instantiate a BufferDescriptor with a callback for the sole purpose of passing it to
-        // scheduleDestroy. This forces the BufferDescriptor callback (and thus the
-        // FrameCompletedCallback) to be called on the user thread.
-        BufferDescriptor b(nullptr, 0u, [](void* buffer, size_t size, void* user) {
-            CallbackData* data = (CallbackData*) user;
-            data->callback(data->userData);
-            free(data);
-        }, data);
-        context.driver->scheduleDestroy(std::move(b));
+    MetalDriver* driver = context.driver;
+    [getPendingCommandBuffer(&context) addCompletedHandler:^(id<MTLCommandBuffer> cb) {
+        driver->scheduleCallback(handler, user, callback);
     }];
 }
 
@@ -524,7 +513,7 @@ MetalTexture::MetalTexture(MetalContext& context, SamplerType target, uint8_t le
     : HwTexture(target, levels, samples, width, height, depth, format, usage), context(context),
         externalImage(context) {
     texture = metalTexture;
-    updateLodRange(0, levels - 1);
+    setLodRange(0, levels - 1);
 }
 
 MetalTexture::~MetalTexture() {
@@ -669,14 +658,14 @@ void MetalTexture::loadImage(uint32_t level, MTLRegion region, PixelBufferDescri
         }
     }
 
-    updateLodRange(level);
+    extendLodRangeTo(level);
 }
 
 void MetalTexture::generateMipmaps() noexcept {
     id <MTLBlitCommandEncoder> blitEncoder = [getPendingCommandBuffer(&context) blitCommandEncoder];
     [blitEncoder generateMipmapsForTexture:texture];
     [blitEncoder endEncoding];
-    updateLodRange(0, texture.mipmapLevelCount - 1);
+    setLodRange(0, texture.mipmapLevelCount - 1);
 }
 
 void MetalTexture::loadSlice(uint32_t level, MTLRegion region, uint32_t byteOffset, uint32_t slice,
@@ -799,18 +788,18 @@ void MetalTexture::loadWithBlit(uint32_t level, uint32_t slice, MTLRegion region
     context.blitter->blit(getPendingCommandBuffer(&context), args, "Texture upload blit");
 }
 
-void MetalTexture::updateLodRange(uint32_t level) {
+void MetalTexture::extendLodRangeTo(uint32_t level) {
     assert_invariant(!isInRenderPass(&context));
     minLod = std::min(minLod, level);
     maxLod = std::max(maxLod, level);
     lodTextureView = nil;
 }
 
-void MetalTexture::updateLodRange(uint32_t min, uint32_t max) {
+void MetalTexture::setLodRange(uint32_t min, uint32_t max) {
     assert_invariant(!isInRenderPass(&context));
     assert_invariant(min <= max);
-    minLod = std::min(minLod, min);
-    maxLod = std::max(maxLod, max);
+    minLod = min;
+    maxLod = max;
     lodTextureView = nil;
 }
 

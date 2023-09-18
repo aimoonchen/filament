@@ -151,14 +151,12 @@ public:
 
     struct GLTimerQuery : public HwTimerQuery {
         struct State {
+            struct {
+                GLuint query;
+            } gl;
             std::atomic<int64_t> elapsed{};
         };
-        struct {
-            GLuint query = 0;
-            std::shared_ptr<State> emulation;
-        } gl;
-        // 0 means not available, otherwise query result in ns.
-        std::atomic<uint64_t> elapsed{};
+        std::shared_ptr<State> state;
     };
 
     struct GLStream : public HwStream {
@@ -202,7 +200,6 @@ public:
             std::condition_variable cond;
             FenceStatus status{ FenceStatus::TIMEOUT_EXPIRED };
         };
-        GLsync sync;
         std::shared_ptr<State> state{ std::make_shared<GLFence::State>() };
     };
 
@@ -214,6 +211,8 @@ private:
     OpenGLContext mContext;
     ShaderCompilerService mShaderCompilerService;
 
+    friend class OpenGLTimerQueryFactory;
+    friend class TimerQueryNative;
     OpenGLContext& getContext() noexcept { return mContext; }
 
     ShaderCompilerService& getShaderCompilerService() noexcept {
@@ -335,7 +334,7 @@ private:
         assert_invariant(!sp.padding1);
         assert_invariant(!sp.padding2);
         auto& samplerMap = mSamplerMap;
-        auto pos = samplerMap.find(sp.u);
+        auto pos = samplerMap.find(sp);
         if (UTILS_UNLIKELY(pos == samplerMap.end())) {
             return getSamplerSlow(sp);
         }
@@ -369,7 +368,8 @@ private:
     // sampler buffer binding points (nullptr if not used)
     std::array<GLSamplerGroup*, Program::SAMPLER_BINDING_COUNT> mSamplerBindings = {};   // 4 pointers
 
-    mutable tsl::robin_map<uint32_t, GLuint> mSamplerMap;
+    mutable tsl::robin_map<SamplerParams, GLuint,
+            SamplerParams::Hasher, SamplerParams::EqualTo> mSamplerMap;
 
     // this must be accessed from the driver thread only
     std::vector<GLTexture*> mTexturesWithStreamsAttached;
@@ -388,6 +388,9 @@ private:
     void whenGpuCommandsComplete(const std::function<void()>& fn) noexcept;
     void executeGpuCommandsCompleteOps() noexcept;
     std::vector<std::pair<GLsync, std::function<void()>>> mGpuCommandCompleteOps;
+
+    void whenFrameComplete(const std::function<void()>& fn) noexcept;
+    std::vector<std::function<void()>> mFrameCompleteOps;
 #endif
 
     // tasks regularly executed on the main thread at until they return true
@@ -397,7 +400,6 @@ private:
 
     // timer query implementation
     OpenGLTimerQueryInterface* mTimerQueryImpl = nullptr;
-    bool mFrameTimeSupported = false;
 
     // for ES2 sRGB support
     GLSwapChain* mCurrentDrawSwapChain = nullptr;
